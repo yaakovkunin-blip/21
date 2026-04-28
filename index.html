@@ -101,6 +101,31 @@
         .balloon.heart { border: 3px solid #ff6b81; }
         .balloon.bomb { background: #2f3542 !important; border: 3px solid #747d8c; }
         .balloon.bomb::after { border-left: 2px solid #57606f; }
+        .balloon.ice { border: 3px solid #70a1ff; box-shadow: 0 0 15px #70a1ff; background: #e7f0ff !important; }
+        .balloon.party { border: 3px solid #ff4757; animation: rainbow 2s infinite; }
+        .balloon.split { border: 3px solid #2ed573; }
+        .balloon.mini { width: 40px !important; height: 50px !important; font-size: 15px !important; }
+
+        @keyframes rainbow {
+            0% { filter: hue-rotate(0deg); }
+            100% { filter: hue-rotate(360deg); }
+        }
+
+        /* Bird Obstacle */
+        .bird {
+            position: absolute;
+            font-size: 40px;
+            z-index: 20;
+            pointer-events: auto;
+            cursor: not-allowed;
+            transition: opacity 0.3s;
+        }
+
+        /* Environment Effects */
+        .night-mode {
+            background: linear-gradient(to bottom, #0f172a, #1e293b) !important;
+        }
+        .night-mode .cloud { opacity: 0.1 !important; }
 
         .balloon::after {
             content: "";
@@ -236,6 +261,7 @@
             <div class="stats-container">
                 <div class="stats">ניקוד: <span id="score">0</span></div>
                 <div class="stats">שיא: <span id="high-score">0</span></div>
+                <div class="stats">💰: <span id="coins">0</span></div>
             </div>
             <div class="stats">שלב: <span id="level">1</span></div>
             <div class="stats">חיים: <span id="lives">5</span></div>
@@ -246,13 +272,16 @@
         <!-- Start Screen -->
         <div id="start-screen" class="screen">
             <h1>🎈 פיצוץ בלונים 🎈</h1>
-            <p style="font-size: 24px; margin: 20px 0;">פוצצו בלונים כדי לצבור נקודות!</p>
-            <ul style="text-align: right; font-size: 18px; line-height: 1.6; margin-bottom: 20px;">
-                <li>✨ <strong>זהוב:</strong> בונוס 50 נקודות</li>
-                <li>❤️ <strong>לב:</strong> חיים נוספים</li>
-                <li>💣 <strong>פצצה:</strong> זהירות! מוריד 3 חיים</li>
-                <li>⚡ <strong>קומבו:</strong> פוצצו מהר כדי להכפיל ניקוד</li>
-            </ul>
+            <p style="font-size: 20px; margin: 10px 0;">פוצצו בלונים וצברו נקודות!</p>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; text-align: right; font-size: 16px; background: rgba(255,255,255,0.1); padding: 15px; border-radius: 15px;">
+                <div>✨ זהוב: 50+ נק'</div>
+                <div>❤️ לב: חיים נוספים</div>
+                <div>💣 פצצה: 3- חיים</div>
+                <div>❄️ קרח: האטה</div>
+                <div>🌈 מסיבה: פיצוץ רדיוס</div>
+                <div>🌀 מתפצל: 3 קטנים</div>
+                <div>🐦 ציפור: אל תגע!</div>
+            </div>
             <button onclick="startGame()">התחל לשחק!</button>
             <div id="high-score-ui">שיא נוכחי: <span id="start-high-score">0</span></div>
         </div>
@@ -271,6 +300,7 @@
         const container = document.getElementById('game-container');
         const scoreEl = document.getElementById('score');
         const highScoreEl = document.getElementById('high-score');
+        const coinsEl = document.getElementById('coins');
         const levelEl = document.getElementById('level');
         const livesEl = document.getElementById('lives');
         const banner = document.getElementById('level-up-banner');
@@ -279,39 +309,43 @@
         let score = 0;
         let level = 1;
         let lives = 5;
+        let coins = 0;
         let gameActive = false;
         let spawnInterval;
+        let birdInterval;
         let baseSpeed = 2.5;
         let currentIntervalTime = 1200;
         let highScore = localStorage.getItem('balloonHighScore') || 0;
-        
+        let isSlowed = false;
+        let windFactor = 0; // Wind drift
+
         // Combo system
         let lastPopTime = 0;
         let comboCount = 0;
-        let comboTimeout;
 
         const colors = ['#ff4757', '#2ed573', '#1e90ff', '#ffa502', '#e84393', '#8e44ad', '#00cec9'];
 
         // Sound System (Web Audio API)
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         function playPopSound(type = 'normal') {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
             osc.connect(gain);
             gain.connect(audioCtx.destination);
 
-            if (type === 'bomb') {
+            if (type === 'bomb' || type === 'bird') {
                 osc.type = 'sawtooth';
-                osc.frequency.setValueAtTime(100, audioCtx.currentTime);
+                osc.frequency.setValueAtTime(type === 'bomb' ? 100 : 200, audioCtx.currentTime);
                 osc.frequency.exponentialRampToValueAtTime(10, audioCtx.currentTime + 0.5);
                 gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
                 gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.5);
                 osc.start();
                 osc.stop(audioCtx.currentTime + 0.5);
-            } else if (type === 'gold') {
+            } else if (type === 'gold' || type === 'ice' || type === 'party') {
                 osc.type = 'sine';
-                osc.frequency.setValueAtTime(800, audioCtx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(1200, audioCtx.currentTime + 0.1);
+                osc.frequency.setValueAtTime(type === 'ice' ? 200 : 800, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(type === 'ice' ? 50 : 1200, audioCtx.currentTime + 0.2);
                 gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
                 gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.2);
                 osc.start();
@@ -363,59 +397,119 @@
             score = 0;
             level = 1;
             lives = 5;
+            coins = 0;
             baseSpeed = 2.5;
             currentIntervalTime = 1200;
             gameActive = true;
             comboCount = 0;
+            isSlowed = false;
+            windFactor = 0;
             
             scoreEl.innerText = score;
             levelEl.innerText = level;
             livesEl.innerText = lives;
+            coinsEl.innerText = coins;
             highScoreEl.innerText = highScore;
 
+            document.body.classList.remove('night-mode');
             document.getElementById('start-screen').classList.add('hidden');
             document.getElementById('game-over-screen').classList.add('hidden');
             document.getElementById('new-record').classList.add('hidden');
 
-            document.querySelectorAll('.balloon').forEach(b => b.remove());
+            document.querySelectorAll('.balloon, .bird').forEach(b => b.remove());
             startSpawning();
         }
 
         function startSpawning() {
             if (spawnInterval) clearInterval(spawnInterval);
+            if (birdInterval) clearInterval(birdInterval);
+
             spawnInterval = setInterval(() => {
                 if (gameActive) createBalloon();
             }, currentIntervalTime);
+
+            birdInterval = setInterval(() => {
+                if (gameActive && level >= 2) createBird();
+            }, 3000 + Math.random() * 5000);
         }
 
-        function createBalloon() {
+        function createBird() {
+            const bird = document.createElement('div');
+            bird.className = 'bird';
+            bird.innerText = '🐦';
+            const fromLeft = Math.random() > 0.5;
+            bird.style.left = fromLeft ? '-50px' : (window.innerWidth + 50) + 'px';
+            bird.style.top = (100 + Math.random() * (window.innerHeight - 300)) + 'px';
+            
+            let x = fromLeft ? -50 : window.innerWidth + 50;
+            const speed = (2 + Math.random() * 3) * (fromLeft ? 1 : -1);
+            
+            const moveBird = () => {
+                if (!gameActive) { bird.remove(); return; }
+                x += speed;
+                bird.style.left = x + 'px';
+                bird.style.transform = `scaleX(${speed > 0 ? -1 : 1})`;
+                
+                if (x < -100 || x > window.innerWidth + 100) {
+                    bird.remove();
+                } else {
+                    requestAnimationFrame(moveBird);
+                }
+            };
+            
+            bird.onclick = () => {
+                playPopSound('bird');
+                lives--;
+                updateLives();
+                shake();
+                bird.style.opacity = '0';
+                setTimeout(() => bird.remove(), 300);
+            };
+            
+            container.appendChild(bird);
+            requestAnimationFrame(moveBird);
+        }
+
+        function createBalloon(xOverride = null, yOverride = null, isMini = false, typeOverride = null) {
             const balloon = document.createElement('div');
-            balloon.className = 'balloon';
+            balloon.className = 'balloon' + (isMini ? ' mini' : '');
             
             // Type Randomizer
             const rand = Math.random();
-            let type = 'normal';
+            let type = typeOverride || 'normal';
             let emoji = '';
             
-            if (rand > 0.95) { type = 'heart'; emoji = '❤️'; }
-            else if (rand > 0.88) { type = 'gold'; emoji = '✨'; }
-            else if (rand > 0.82) { type = 'bomb'; emoji = '💣'; }
+            if (!typeOverride) {
+                const typeRand = Math.random();
+                if (typeRand > 0.97) { type = 'heart'; emoji = '❤️'; } // 3%
+                else if (typeRand > 0.90) { type = 'gold'; emoji = '✨'; } // 7%
+                else if (typeRand > 0.83) { type = 'bomb'; emoji = '💣'; } // 7%
+                else if (typeRand > 0.81) { type = 'ice'; emoji = '❄️'; } // 2% - less frequent
+                else if (typeRand > 0.76) { type = 'party'; emoji = '🌈'; } // 5%
+                else if (typeRand > 0.71) { type = 'split'; emoji = '🌀'; } // 5%
+            }
             
             balloon.classList.add(type);
             balloon.innerHTML = emoji;
             
-            const color = type === 'bomb' ? '#2f3542' : colors[Math.floor(Math.random() * colors.length)];
-            const size = type === 'normal' ? (60 + Math.random() * 40) : 80;
-            const xPos = Math.random() * (window.innerWidth - size);
+            const color = type === 'bomb' ? '#2f3542' : 
+                         type === 'ice' ? '#70a1ff' :
+                         type === 'party' ? colors[Math.floor(Math.random() * colors.length)] :
+                         colors[Math.floor(Math.random() * colors.length)];
+
+            const size = isMini ? 40 : (type === 'normal' ? (60 + Math.random() * 40) : 80);
+            const xPos = xOverride !== null ? xOverride : Math.random() * (window.innerWidth - size);
             
             balloon.style.backgroundColor = color;
             balloon.style.width = `${size}px`;
             balloon.style.height = `${size * 1.25}px`;
             balloon.style.left = `${xPos}px`;
-            balloon.style.bottom = `-150px`;
+            balloon.style.bottom = yOverride !== null ? yOverride + 'px' : `-150px`;
 
-            let currentBottom = -150;
-            const speed = (baseSpeed + (Math.random() * level * 0.5)) * (type === 'gold' ? 1.5 : 1);
+            let currentBottom = yOverride !== null ? yOverride : -150;
+            let currentLeft = xPos;
+            
+            const speed = (baseSpeed + (Math.random() * level * 0.3)) * (type === 'gold' ? 1.5 : 1) * (isMini ? 1.4 : 1);
 
             const move = () => {
                 if (!gameActive) {
@@ -423,13 +517,16 @@
                     return;
                 }
                 
-                currentBottom += speed;
+                const frameSpeed = isSlowed ? speed * 0.4 : speed;
+                currentBottom += frameSpeed;
+                currentLeft += windFactor;
+                
                 balloon.style.bottom = `${currentBottom}px`;
+                balloon.style.left = `${currentLeft}px`;
 
                 if (currentBottom > window.innerHeight) {
                     balloon.remove();
-                    // Lose life only if it's a normal, gold, or heart balloon (not bomb)
-                    if (type !== 'bomb' && !balloon.classList.contains('popped')) {
+                    if (type !== 'bomb' && type !== 'split' && !balloon.classList.contains('popped')) {
                         loseLife();
                     }
                 } else {
@@ -437,16 +534,8 @@
                 }
             };
 
-            balloon.onmousedown = (e) => {
-                e.preventDefault();
-                popBalloon(balloon, type, color);
-            };
-            
-            // Support for touch
-            balloon.ontouchstart = (e) => {
-                e.preventDefault();
-                popBalloon(balloon, type, color);
-            };
+            balloon.onmousedown = (e) => { e.preventDefault(); popBalloon(balloon, type, color); };
+            balloon.ontouchstart = (e) => { e.preventDefault(); popBalloon(balloon, type, color); };
 
             container.appendChild(balloon);
             requestAnimationFrame(move);
@@ -455,27 +544,35 @@
         function popBalloon(balloon, type, color) {
             if (balloon.classList.contains('popped')) return;
             balloon.classList.add('popped');
-            
-            // Sound
             playPopSound(type);
 
-            // Scoring & Mechanics
             let points = 10;
             
             if (type === 'bomb') {
-                lives -= 3;
-                updateLives();
-                shake();
-                points = 0;
+                lives -= 3; updateLives(); shake(); points = 0;
             } else if (type === 'gold') {
-                points = 50;
-                createComboText(balloon.offsetLeft, window.innerHeight - balloon.offsetTop, "+50!");
+                points = 50; coins += 5; coinsEl.innerText = coins;
+                createComboText(balloon.offsetLeft, window.innerHeight - balloon.offsetTop, "+50! 💰");
             } else if (type === 'heart') {
-                lives = Math.min(lives + 1, 8);
-                updateLives();
-                points = 5;
+                lives = Math.min(lives + 1, 8); updateLives(); points = 5;
+            } else if (type === 'ice') {
+                isSlowed = true; points = 15;
+                createComboText(balloon.offsetLeft, window.innerHeight - balloon.offsetTop, "❄️ הקפאה!");
+                setTimeout(() => { isSlowed = false; }, 5000); // Effect lasts exactly 5 seconds
+            } else if (type === 'party') {
+                points = 20;
+                createComboText(balloon.offsetLeft, window.innerHeight - balloon.offsetTop, "🌈 מסיבה!");
+                popRadius(balloon.offsetLeft + 40, window.innerHeight - balloon.offsetTop - 50);
+            } else if (type === 'split') {
+                points = 10;
+                const bx = balloon.offsetLeft;
+                const by = window.innerHeight - balloon.offsetTop - 50;
+                setTimeout(() => {
+                    createBalloon(bx - 30, by, true, 'normal');
+                    createBalloon(bx, by, true, 'normal');
+                    createBalloon(bx + 30, by, true, 'normal');
+                }, 50);
             } else {
-                // Combo logic
                 const now = Date.now();
                 if (now - lastPopTime < 600) {
                     comboCount++;
@@ -483,9 +580,7 @@
                         points += comboCount * 5;
                         createComboText(balloon.offsetLeft, window.innerHeight - balloon.offsetTop, `קומבו X${comboCount}`);
                     }
-                } else {
-                    comboCount = 0;
-                }
+                } else { comboCount = 0; }
                 lastPopTime = now;
             }
 
@@ -502,33 +597,41 @@
                            color);
 
             setTimeout(() => balloon.remove(), 250);
-
-            // Level up every 150 points
-            const nextLevelThreshold = level * 150;
-            if (score >= nextLevelThreshold) {
-                levelUp();
-            }
+            if (score >= level * 150) levelUp();
         }
 
-        function createComboText(x, y, text) {
-            const el = document.createElement('div');
-            el.className = 'combo-text';
-            el.innerText = text;
-            el.style.left = x + 'px';
-            el.style.bottom = y + 'px';
-            container.appendChild(el);
-            setTimeout(() => el.remove(), 800);
+        function popRadius(x, y) {
+            const balloons = document.querySelectorAll('.balloon:not(.popped)');
+            balloons.forEach(b => {
+                const bx = b.offsetLeft + 40;
+                const by = window.innerHeight - b.offsetTop - 50;
+                const dist = Math.sqrt((x-bx)**2 + (y-by)**2);
+                if (dist < 250) {
+                    // Trigger click on nearby balloons
+                    b.onmousedown(new MouseEvent('mousedown'));
+                }
+            });
         }
 
         function levelUp() {
             level++;
             levelEl.innerText = level;
             baseSpeed += 0.4;
-            currentIntervalTime = Math.max(250, currentIntervalTime - 150);
+            currentIntervalTime = Math.max(200, currentIntervalTime - 100);
             
+            // Environment change
+            if (level % 3 === 0) {
+                document.body.classList.toggle('night-mode');
+            }
+            
+            // Wind change
+            if (level >= 4) {
+                windFactor = (Math.random() - 0.5) * 2;
+                createComboText(window.innerWidth/2, window.innerHeight/2, windFactor > 0 ? "🌬️ רוח חזקה ימינה!" : "🌬️ רוח חזקה שמאלה!");
+            }
+
             banner.classList.add('show-banner');
             setTimeout(() => banner.classList.remove('show-banner'), 1500);
-            
             startSpawning();
         }
 

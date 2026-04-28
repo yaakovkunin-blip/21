@@ -2,10 +2,627 @@
 <html lang="he" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>מסמך חדש</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>פיצוץ בלונים - המשחק המטורף!</title>
+    <style>
+        :root {
+            --primary-bg: #87CEEB;
+            --font-main: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            --gold: #ffd700;
+            --danger: #ff4757;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: var(--font-main);
+            background: var(--primary-bg);
+            background: linear-gradient(to bottom, #1e90ff, #87CEEB);
+            user-select: none;
+            touch-action: none;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            cursor: crosshair;
+        }
+
+        /* Clouds Background */
+        .cloud {
+            position: absolute;
+            background: white;
+            border-radius: 50px;
+            opacity: 0.8;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        /* UI Elements */
+        #ui-layer {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            left: 20px;
+            display: flex;
+            justify-content: space-between;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        .stats-container {
+            display: flex;
+            gap: 15px;
+        }
+
+        .stats {
+            background: rgba(255, 255, 255, 0.25);
+            backdrop-filter: blur(8px);
+            padding: 10px 25px;
+            border-radius: 20px;
+            color: white;
+            font-size: 22px;
+            font-weight: bold;
+            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .stats span {
+            color: var(--gold);
+            text-shadow: 0 0 5px rgba(255,215,0,0.5);
+        }
+
+        /* Balloon Styling */
+        .balloon {
+            position: absolute;
+            width: 80px;
+            height: 100px;
+            border-radius: 50% 50% 50% 50% / 40% 40% 60% 60%;
+            cursor: pointer;
+            filter: drop-shadow(0 10px 15px rgba(0,0,0,0.3));
+            will-change: transform, bottom;
+            z-index: 10;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 30px;
+        }
+
+        /* Special Balloon Types */
+        .balloon.gold { border: 3px solid gold; box-shadow: 0 0 20px gold; }
+        .balloon.heart { border: 3px solid #ff6b81; }
+        .balloon.bomb { background: #2f3542 !important; border: 3px solid #747d8c; }
+        .balloon.bomb::after { border-left: 2px solid #57606f; }
+
+        .balloon::after {
+            content: "";
+            position: absolute;
+            bottom: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-left: 2px solid rgba(255,255,255,0.6);
+            height: 50px;
+        }
+
+        .balloon::before {
+            content: "";
+            position: absolute;
+            width: 25%;
+            height: 30%;
+            background: rgba(255, 255, 255, 0.4);
+            border-radius: 50%;
+            top: 15%;
+            left: 15%;
+        }
+
+        /* Animations */
+        @keyframes pop {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.4); }
+            100% { transform: scale(0); opacity: 0; }
+        }
+
+        .popped {
+            animation: pop 0.25s forwards cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            pointer-events: none;
+        }
+
+        /* Combo Text */
+        .combo-text {
+            position: absolute;
+            color: white;
+            font-weight: 900;
+            font-size: 40px;
+            pointer-events: none;
+            z-index: 100;
+            text-shadow: 0 0 10px rgba(0,0,0,0.5);
+            animation: float-up 0.8s forwards ease-out;
+        }
+
+        @keyframes float-up {
+            0% { transform: translateY(0) scale(1); opacity: 1; }
+            100% { transform: translateY(-100px) scale(1.5); opacity: 0; }
+        }
+
+        /* Screens */
+        .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(15, 25, 45, 0.85);
+            backdrop-filter: blur(10px);
+            color: white;
+            z-index: 200;
+            text-align: center;
+        }
+
+        .screen h1 {
+            font-size: 70px;
+            margin: 0;
+            background: linear-gradient(45deg, #fff, var(--gold));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 5px 15px rgba(0,0,0,0.3));
+        }
+
+        button {
+            padding: 18px 50px;
+            font-size: 28px;
+            background: linear-gradient(45deg, #ff4757, #ff6b81);
+            color: white;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            font-weight: bold;
+            margin-top: 30px;
+            box-shadow: 0 10px 20px rgba(255, 71, 87, 0.3);
+        }
+
+        button:hover {
+            transform: scale(1.1) translateY(-5px);
+            box-shadow: 0 15px 30px rgba(255, 71, 87, 0.4);
+        }
+
+        #level-up-banner {
+            position: absolute;
+            top: 40%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0);
+            font-size: 100px;
+            color: var(--gold);
+            font-weight: 900;
+            text-shadow: 0 10px 30px rgba(255,215,0,0.6);
+            pointer-events: none;
+            z-index: 150;
+            transition: transform 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+
+        .show-banner {
+            transform: translate(-50%, -50%) scale(1) !important;
+        }
+
+        .hidden { display: none !important; }
+        
+        #high-score-ui {
+            font-size: 18px;
+            color: rgba(255,255,255,0.7);
+            margin-top: 10px;
+        }
+    </style>
 </head>
 <body>
-    <h1>שלום עולם!</h1>
+
+    <div id="game-container">
+        <!-- Clouds -->
+        <div id="background-elements"></div>
+
+        <!-- UI -->
+        <div id="ui-layer">
+            <div class="stats-container">
+                <div class="stats">ניקוד: <span id="score">0</span></div>
+                <div class="stats">שיא: <span id="high-score">0</span></div>
+            </div>
+            <div class="stats">שלב: <span id="level">1</span></div>
+            <div class="stats">חיים: <span id="lives">5</span></div>
+        </div>
+
+        <div id="level-up-banner">שלב חדש!</div>
+
+        <!-- Start Screen -->
+        <div id="start-screen" class="screen">
+            <h1>🎈 פיצוץ בלונים 🎈</h1>
+            <p style="font-size: 24px; margin: 20px 0;">פוצצו בלונים כדי לצבור נקודות!</p>
+            <ul style="text-align: right; font-size: 18px; line-height: 1.6; margin-bottom: 20px;">
+                <li>✨ <strong>זהוב:</strong> בונוס 50 נקודות</li>
+                <li>❤️ <strong>לב:</strong> חיים נוספים</li>
+                <li>💣 <strong>פצצה:</strong> זהירות! מוריד 3 חיים</li>
+                <li>⚡ <strong>קומבו:</strong> פוצצו מהר כדי להכפיל ניקוד</li>
+            </ul>
+            <button onclick="startGame()">התחל לשחק!</button>
+            <div id="high-score-ui">שיא נוכחי: <span id="start-high-score">0</span></div>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div id="game-over-screen" class="screen hidden">
+            <h1 style="color: var(--danger);">המשחק נגמר!</h1>
+            <p style="font-size: 35px; margin: 10px 0;">ניקוד סופי: <span id="final-score" style="color: var(--gold);">0</span></p>
+            <p style="font-size: 22px;">הגעת לשלב: <span id="final-level">1</span></p>
+            <div id="new-record" class="hidden" style="color: var(--gold); font-weight: bold; font-size: 30px; margin: 15px;">שיא חדש! 🏆</div>
+            <button onclick="startGame()">נסה שוב</button>
+        </div>
+    </div>
+
+    <script>
+        const container = document.getElementById('game-container');
+        const scoreEl = document.getElementById('score');
+        const highScoreEl = document.getElementById('high-score');
+        const levelEl = document.getElementById('level');
+        const livesEl = document.getElementById('lives');
+        const banner = document.getElementById('level-up-banner');
+        
+        // Game State
+        let score = 0;
+        let level = 1;
+        let lives = 5;
+        let gameActive = false;
+        let spawnInterval;
+        let baseSpeed = 2.5;
+        let currentIntervalTime = 1200;
+        let highScore = localStorage.getItem('balloonHighScore') || 0;
+        
+        // Combo system
+        let lastPopTime = 0;
+        let comboCount = 0;
+        let comboTimeout;
+
+        const colors = ['#ff4757', '#2ed573', '#1e90ff', '#ffa502', '#e84393', '#8e44ad', '#00cec9'];
+
+        // Sound System (Web Audio API)
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playPopSound(type = 'normal') {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            if (type === 'bomb') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(100, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(10, audioCtx.currentTime + 0.5);
+                gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.5);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.5);
+            } else if (type === 'gold') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(1200, audioCtx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.2);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.2);
+            } else {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(400, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(10, audioCtx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.1);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.1);
+            }
+        }
+
+        // Initialize High Score
+        highScoreEl.innerText = highScore;
+        document.getElementById('start-high-score').innerText = highScore;
+
+        function createClouds() {
+            const bg = document.getElementById('background-elements');
+            for(let i=0; i<6; i++) {
+                const cloud = document.createElement('div');
+                cloud.className = 'cloud';
+                const w = 100 + Math.random() * 200;
+                cloud.style.width = w + 'px';
+                cloud.style.height = (w * 0.4) + 'px';
+                cloud.style.left = Math.random() * 100 + '%';
+                cloud.style.top = Math.random() * 60 + '%';
+                cloud.style.opacity = 0.3 + Math.random() * 0.5;
+                bg.appendChild(cloud);
+                
+                let x = parseFloat(cloud.style.left);
+                const speed = 0.02 + Math.random() * 0.05;
+                function moveCloud() {
+                    x -= speed;
+                    if (x < -20) x = 110;
+                    cloud.style.left = x + '%';
+                    requestAnimationFrame(moveCloud);
+                }
+                moveCloud();
+            }
+        }
+        createClouds();
+
+        function startGame() {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            
+            score = 0;
+            level = 1;
+            lives = 5;
+            baseSpeed = 2.5;
+            currentIntervalTime = 1200;
+            gameActive = true;
+            comboCount = 0;
+            
+            scoreEl.innerText = score;
+            levelEl.innerText = level;
+            livesEl.innerText = lives;
+            highScoreEl.innerText = highScore;
+
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('game-over-screen').classList.add('hidden');
+            document.getElementById('new-record').classList.add('hidden');
+
+            document.querySelectorAll('.balloon').forEach(b => b.remove());
+            startSpawning();
+        }
+
+        function startSpawning() {
+            if (spawnInterval) clearInterval(spawnInterval);
+            spawnInterval = setInterval(() => {
+                if (gameActive) createBalloon();
+            }, currentIntervalTime);
+        }
+
+        function createBalloon() {
+            const balloon = document.createElement('div');
+            balloon.className = 'balloon';
+            
+            // Type Randomizer
+            const rand = Math.random();
+            let type = 'normal';
+            let emoji = '';
+            
+            if (rand > 0.95) { type = 'heart'; emoji = '❤️'; }
+            else if (rand > 0.88) { type = 'gold'; emoji = '✨'; }
+            else if (rand > 0.82) { type = 'bomb'; emoji = '💣'; }
+            
+            balloon.classList.add(type);
+            balloon.innerHTML = emoji;
+            
+            const color = type === 'bomb' ? '#2f3542' : colors[Math.floor(Math.random() * colors.length)];
+            const size = type === 'normal' ? (60 + Math.random() * 40) : 80;
+            const xPos = Math.random() * (window.innerWidth - size);
+            
+            balloon.style.backgroundColor = color;
+            balloon.style.width = `${size}px`;
+            balloon.style.height = `${size * 1.25}px`;
+            balloon.style.left = `${xPos}px`;
+            balloon.style.bottom = `-150px`;
+
+            let currentBottom = -150;
+            const speed = (baseSpeed + (Math.random() * level * 0.5)) * (type === 'gold' ? 1.5 : 1);
+
+            const move = () => {
+                if (!gameActive) {
+                    balloon.remove();
+                    return;
+                }
+                
+                currentBottom += speed;
+                balloon.style.bottom = `${currentBottom}px`;
+
+                if (currentBottom > window.innerHeight) {
+                    balloon.remove();
+                    // Lose life only if it's a normal, gold, or heart balloon (not bomb)
+                    if (type !== 'bomb' && !balloon.classList.contains('popped')) {
+                        loseLife();
+                    }
+                } else {
+                    requestAnimationFrame(move);
+                }
+            };
+
+            balloon.onmousedown = (e) => {
+                e.preventDefault();
+                popBalloon(balloon, type, color);
+            };
+            
+            // Support for touch
+            balloon.ontouchstart = (e) => {
+                e.preventDefault();
+                popBalloon(balloon, type, color);
+            };
+
+            container.appendChild(balloon);
+            requestAnimationFrame(move);
+        }
+
+        function popBalloon(balloon, type, color) {
+            if (balloon.classList.contains('popped')) return;
+            balloon.classList.add('popped');
+            
+            // Sound
+            playPopSound(type);
+
+            // Scoring & Mechanics
+            let points = 10;
+            
+            if (type === 'bomb') {
+                lives -= 3;
+                updateLives();
+                shake();
+                points = 0;
+            } else if (type === 'gold') {
+                points = 50;
+                createComboText(balloon.offsetLeft, window.innerHeight - balloon.offsetTop, "+50!");
+            } else if (type === 'heart') {
+                lives = Math.min(lives + 1, 8);
+                updateLives();
+                points = 5;
+            } else {
+                // Combo logic
+                const now = Date.now();
+                if (now - lastPopTime < 600) {
+                    comboCount++;
+                    if (comboCount > 1) {
+                        points += comboCount * 5;
+                        createComboText(balloon.offsetLeft, window.innerHeight - balloon.offsetTop, `קומבו X${comboCount}`);
+                    }
+                } else {
+                    comboCount = 0;
+                }
+                lastPopTime = now;
+            }
+
+            score += points;
+            scoreEl.innerText = score;
+            if (score > highScore) {
+                highScore = score;
+                highScoreEl.innerText = highScore;
+                localStorage.setItem('balloonHighScore', highScore);
+            }
+
+            createParticles(balloon.offsetLeft + balloon.offsetWidth/2, 
+                           window.innerHeight - balloon.offsetTop - balloon.offsetHeight/2, 
+                           color);
+
+            setTimeout(() => balloon.remove(), 250);
+
+            // Level up every 150 points
+            const nextLevelThreshold = level * 150;
+            if (score >= nextLevelThreshold) {
+                levelUp();
+            }
+        }
+
+        function createComboText(x, y, text) {
+            const el = document.createElement('div');
+            el.className = 'combo-text';
+            el.innerText = text;
+            el.style.left = x + 'px';
+            el.style.bottom = y + 'px';
+            container.appendChild(el);
+            setTimeout(() => el.remove(), 800);
+        }
+
+        function levelUp() {
+            level++;
+            levelEl.innerText = level;
+            baseSpeed += 0.4;
+            currentIntervalTime = Math.max(250, currentIntervalTime - 150);
+            
+            banner.classList.add('show-banner');
+            setTimeout(() => banner.classList.remove('show-banner'), 1500);
+            
+            startSpawning();
+        }
+
+        function updateLives() {
+            livesEl.innerText = lives;
+            if (lives <= 0) endGame();
+        }
+
+        function loseLife() {
+            lives--;
+            updateLives();
+            shake();
+        }
+
+        function shake() {
+            container.style.animation = 'none';
+            container.offsetHeight;
+            container.style.animation = 'shake 0.4s';
+        }
+
+        function endGame() {
+            gameActive = false;
+            clearInterval(spawnInterval);
+            document.getElementById('final-score').innerText = score;
+            document.getElementById('final-level').innerText = level;
+            document.getElementById('game-over-screen').classList.remove('hidden');
+            
+            if (score >= highScore && score > 0) {
+                document.getElementById('new-record').classList.remove('hidden');
+            }
+        }
+
+        function createParticles(x, y, color) {
+            const count = 15;
+            for (let i = 0; i < count; i++) {
+                const p = document.createElement('div');
+                p.className = 'particle';
+                p.style.backgroundColor = color;
+                p.style.width = (4 + Math.random() * 6) + 'px';
+                p.style.height = p.style.width;
+                p.style.left = `${x}px`;
+                p.style.bottom = `${y}px`;
+                container.appendChild(p);
+
+                const angle = Math.random() * Math.PI * 2;
+                const velocity = 3 + Math.random() * 8;
+                let vx = Math.cos(angle) * velocity;
+                let vy = Math.sin(angle) * velocity;
+                let opacity = 1;
+
+                const animateP = () => {
+                    const currentL = parseFloat(p.style.left);
+                    const currentB = parseFloat(p.style.bottom);
+                    p.style.left = `${currentL + vx}px`;
+                    p.style.bottom = `${currentB + vy}px`;
+                    vy -= 0.2; // Gravity
+                    opacity -= 0.015;
+                    p.style.opacity = opacity;
+                    if (opacity > 0) requestAnimationFrame(animateP);
+                    else p.remove();
+                };
+                requestAnimationFrame(animateP);
+            }
+        }
+    </script>
+    <style>
+        @keyframes shake {
+            0%, 100% { transform: translate(0, 0); }
+            10%, 30%, 50%, 70%, 90% { transform: translate(-8px, 0); }
+            20%, 40%, 60%, 80% { transform: translate(8px, 0); }
+        }
+        .particle {
+            position: absolute;
+            pointer-events: none;
+            border-radius: 50%;
+            z-index: 50;
+            box-shadow: 0 0 5px rgba(255,255,255,0.5);
+        }
+    </style>
+</body>
+    <style>
+        @keyframes shake {
+            0% { transform: translate(1px, 1px) rotate(0deg); }
+            10% { transform: translate(-1px, -2px) rotate(-1deg); }
+            20% { transform: translate(-3px, 0px) rotate(1deg); }
+            30% { transform: translate(3px, 2px) rotate(0deg); }
+            40% { transform: translate(1px, -1px) rotate(1deg); }
+            50% { transform: translate(-1px, 2px) rotate(-1deg); }
+            60% { transform: translate(-3px, 1px) rotate(0deg); }
+            70% { transform: translate(3px, 1px) rotate(-1deg); }
+            80% { transform: translate(-1px, -1px) rotate(1deg); }
+            90% { transform: translate(1px, 2px) rotate(0deg); }
+            100% { transform: translate(1px, -2px) rotate(-1deg); }
+        }
+    </style>
 </body>
 </html>

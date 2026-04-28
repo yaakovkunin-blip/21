@@ -480,13 +480,12 @@
             let emoji = '';
             
             if (!typeOverride) {
-                const typeRand = Math.random();
-                if (typeRand > 0.97) { type = 'heart'; emoji = '❤️'; } // 3%
-                else if (typeRand > 0.90) { type = 'gold'; emoji = '✨'; } // 7%
-                else if (typeRand > 0.83) { type = 'bomb'; emoji = '💣'; } // 7%
-                else if (typeRand > 0.81) { type = 'ice'; emoji = '❄️'; } // 2% - less frequent
-                else if (typeRand > 0.76) { type = 'party'; emoji = '🌈'; } // 5%
-                else if (typeRand > 0.71) { type = 'split'; emoji = '🌀'; } // 5%
+                if (rand > 0.96) { type = 'heart'; emoji = '❤️'; }
+                else if (rand > 0.90) { type = 'gold'; emoji = '✨'; }
+                else if (rand > 0.85) { type = 'bomb'; emoji = '💣'; }
+                else if (rand > 0.80) { type = 'ice'; emoji = '❄️'; }
+                else if (rand > 0.75) { type = 'party'; emoji = '🌈'; }
+                else if (rand > 0.70) { type = 'split'; emoji = '🌀'; }
             }
             
             balloon.classList.add(type);
@@ -558,7 +557,7 @@
             } else if (type === 'ice') {
                 isSlowed = true; points = 15;
                 createComboText(balloon.offsetLeft, window.innerHeight - balloon.offsetTop, "❄️ הקפאה!");
-                setTimeout(() => { isSlowed = false; }, 5000); // Effect lasts exactly 5 seconds
+                setTimeout(() => isSlowed = false, 5000);
             } else if (type === 'party') {
                 points = 20;
                 createComboText(balloon.offsetLeft, window.innerHeight - balloon.offsetTop, "🌈 מסיבה!");

@@ -101,7 +101,6 @@
         .balloon.heart { border: 3px solid #ff6b81; }
         .balloon.bomb { background: #2f3542 !important; border: 3px solid #747d8c; }
         .balloon.bomb::after { border-left: 2px solid #57606f; }
-        .balloon.ice { border: 3px solid #70a1ff; box-shadow: 0 0 15px #70a1ff; background: #e7f0ff !important; }
         .balloon.party { border: 3px solid #ff4757; animation: rainbow 2s infinite; }
         .balloon.split { border: 3px solid #2ed573; }
         .balloon.double { border: 3px dashed #9b59b6; box-shadow: 0 0 15px #9b59b6; position: relative; }
@@ -325,9 +324,7 @@
         let baseSpeed = 2.5;
         let currentIntervalTime = 1200;
         let highScore = localStorage.getItem('balloonHighScore') || 0;
-        let isSlowed = false;
         let windFactor = 0; // Wind drift
-        let iceBalloonsUsed = 0; // Count ice balloons (max 2 per game)
 
         // Combo system
         let lastPopTime = 0;
@@ -352,10 +349,10 @@
                 gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.5);
                 osc.start();
                 osc.stop(audioCtx.currentTime + 0.5);
-            } else if (type === 'gold' || type === 'ice' || type === 'party') {
+            } else if (type === 'gold' || type === 'party') {
                 osc.type = 'sine';
-                osc.frequency.setValueAtTime(type === 'ice' ? 200 : 800, audioCtx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(type === 'ice' ? 50 : 1200, audioCtx.currentTime + 0.2);
+                osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(1200, audioCtx.currentTime + 0.2);
                 gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
                 gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.2);
                 osc.start();
@@ -407,13 +404,11 @@
             score = 0;
             level = 1;
             lives = 5;
-            baseSpeed = 2.5;
-            currentIntervalTime = 1200;
+            baseSpeed = 2.4;
+            currentIntervalTime = 1300;
             gameActive = true;
             comboCount = 0;
-            isSlowed = false;
             windFactor = 0;
-            iceBalloonsUsed = 0;
             
             scoreEl.innerText = score;
             levelEl.innerText = level;
@@ -434,7 +429,10 @@
             if (birdInterval) clearInterval(birdInterval);
 
             spawnInterval = setInterval(() => {
-                if (gameActive) createBalloon();
+                if (!gameActive) return;
+                createBalloon();
+                if (level >= 4 && Math.random() < 0.25) createBalloon();
+                if (level >= 7 && Math.random() < 0.18) createBalloon();
             }, currentIntervalTime);
 
             birdInterval = setInterval(() => {
@@ -489,22 +487,24 @@
             let emoji = '';
             
             if (!typeOverride) {
-                if (rand > 0.97) { type = 'heart'; emoji = '❤️'; }
-                else if (rand > 0.92) { type = 'gold'; emoji = '✨'; }
-                else if (rand > 0.87) { type = 'bomb'; emoji = '💣'; }
-                else if (rand > 0.82 && iceBalloonsUsed < 2) { type = 'ice'; emoji = '❄️'; iceBalloonsUsed++; }
-                else if (rand > 0.78) { type = 'timer'; emoji = '⏳'; }
-                else if (rand > 0.74) { type = 'shrink'; emoji = '🤏'; }
-                else if (rand > 0.70) { type = 'party'; emoji = '🌈'; }
-                else if (rand > 0.66) { type = 'split'; emoji = '🌀'; }
-                else if (rand > 0.62) { type = 'double'; emoji = '2️⃣'; }
+                // Make normal balloons more common; specials are rarer
+                if (rand > 0.995) { type = 'heart'; emoji = '❤️'; }
+                else if (rand > 0.985) { type = 'gold'; emoji = '✨'; }
+                else if (rand > 0.96) { type = 'bomb'; emoji = '💣'; }
+                else if (rand > 0.94) { type = 'timer'; emoji = '⏳'; }
+                else if (rand > 0.92) { type = 'shrink'; emoji = '🤏'; }
+                else if (rand > 0.90) { type = 'party'; emoji = '🌈'; }
+                else if (rand > 0.88) { type = 'split'; emoji = '🌀'; }
+                else if (rand > 0.995) { type = 'explode'; emoji = '💥'; }
+                else { type = 'normal'; }
             }
-            
+
+            // split/explode handled when popped in popBalloon
+
             balloon.classList.add(type);
             if (type !== 'double') balloon.innerHTML = emoji;
             
-            const color = type === 'bomb' ? '#2f3542' : 
-                         type === 'ice' ? '#70a1ff' :
+            const color = type === 'bomb' ? '#2f3542' :
                          type === 'timer' ? '#f5d76e' :
                          type === 'shrink' ? '#fad7a0' :
                          type === 'party' ? colors[Math.floor(Math.random() * colors.length)] :
@@ -522,7 +522,7 @@
             let currentBottom = yOverride !== null ? yOverride : -150;
             let currentLeft = xPos;
             
-            const speed = (baseSpeed + (Math.random() * level * 0.3)) * (type === 'gold' ? 1.5 : 1) * (isMini ? 1.4 : 1);
+            const speed = (baseSpeed + Math.random() * 0.5 + level * 0.08) * (type === 'gold' ? 1.2 : 1) * (isMini ? 1.25 : 1);
 
             const move = () => {
                 if (!gameActive) {
@@ -530,8 +530,7 @@
                     return;
                 }
                 
-                const frameSpeed = isSlowed ? speed * 0.4 : speed;
-                currentBottom += frameSpeed;
+                currentBottom += speed;
                 currentLeft += windFactor;
                 
                 balloon.style.bottom = `${currentBottom}px`;
@@ -626,25 +625,26 @@
             
             if (type === 'bomb') {
                 lives -= 3; updateLives(); shake(); points = 0;
+                createComboText(balloon.offsetLeft, window.innerHeight - balloon.offsetTop, "💣 פיצוץ חזק!");
             } else if (type === 'gold') {
                 points = 50;
                 createComboText(balloon.offsetLeft, window.innerHeight - balloon.offsetTop, "+50 נקודות! ✨");
             } else if (type === 'heart') {
                 lives = Math.min(lives + 1, 8); updateLives(); points = 5;
-            } else if (type === 'ice') {
-                isSlowed = true; points = 15;
-                createComboText(balloon.offsetLeft, window.innerHeight - balloon.offsetTop, "❄️ הקפאה - 5 שניות!");
-                setTimeout(() => isSlowed = false, 5000);
             } else if (type === 'party') {
                 points = 20;
                 createComboText(balloon.offsetLeft, window.innerHeight - balloon.offsetTop, "🌈 מסיבה!");
                 popRadius(balloon.offsetLeft + 40, window.innerHeight - balloon.offsetTop - 50);
+            } else if (type === 'timer') {
+                points = 25;
+                createComboText(balloon.offsetLeft, window.innerHeight - balloon.offsetTop, "⏳ ניצחת את השעון!");
             } else if (type === 'shrink') {
                 points = 20;
                 createComboText(balloon.offsetLeft, window.innerHeight - balloon.offsetTop, "🤏 כיווץ!");
                 shrinkBalloons();
             } else if (type === 'split') {
                 points = 10;
+                createComboText(balloon.offsetLeft, window.innerHeight - balloon.offsetTop, "🌀 מתפצל!");
                 const bx = balloon.offsetLeft;
                 const by = window.innerHeight - balloon.offsetTop - 50;
                 setTimeout(() => {
@@ -652,9 +652,14 @@
                     createBalloon(bx, by, true, 'normal');
                     createBalloon(bx + 30, by, true, 'normal');
                 }, 50);
+            } else if (type === 'explode') {
+                points = 30;
+                createComboText(balloon.offsetLeft, window.innerHeight - balloon.offsetTop, "💥 פיצוץ עוצמתי!");
+                playPopSound('bomb');
+                popRadius(balloon.offsetLeft + balloon.offsetWidth/2, window.innerHeight - balloon.offsetTop - balloon.offsetHeight/2);
             } else if (type === 'double') {
                 points = 15;
-                createComboText(balloon.offsetLeft, window.innerHeight - balloon.offsetTop, "🎯 כמו קסם!");
+                createComboText(balloon.offsetLeft, window.innerHeight - balloon.offsetTop, "🎯 בינגו!");
             } else {
                 const now = Date.now();
                 if (now - lastPopTime < 600) {
@@ -699,8 +704,8 @@
         function levelUp() {
             level++;
             levelEl.innerText = level;
-            baseSpeed += 0.4;
-            currentIntervalTime = Math.max(200, currentIntervalTime - 100);
+            baseSpeed += 0.25;
+            currentIntervalTime = Math.max(450, currentIntervalTime - 70);
             
             // Environment change
             if (level % 3 === 0) {
@@ -709,12 +714,13 @@
             
             // Wind change
             if (level >= 4) {
-                windFactor = (Math.random() - 0.5) * 2;
-                createComboText(window.innerWidth/2, window.innerHeight/2, windFactor > 0 ? "🌬️ רוח חזקה ימינה!" : "🌬️ רוח חזקה שמאלה!");
+                windFactor = (Math.random() - 0.5) * 2.0;
+                createComboText(window.innerWidth/2, window.innerHeight/2, windFactor > 0 ? "🌬️ רוח ימינה!" : "🌬️ רוח שמאלה!");
             }
 
+            banner.innerText = `שלב ${level}`;
             banner.classList.add('show-banner');
-            setTimeout(() => banner.classList.remove('show-banner'), 1500);
+            setTimeout(() => banner.classList.remove('show-banner'), 1200);
             startSpawning();
         }
 

@@ -109,6 +109,7 @@
             border: 3px dashed #9b59b6 !important;
             opacity: 0.6;
         }
+        .balloon.explode { border: 3px solid #e74c3c; background: #ff7675 !important; }
         .balloon.timer { border: 3px solid #f39c12; background: #f5d76e !important; color: #2c3e50; }
         .balloon.timer .timer-counter { position: absolute; bottom: 8px; right: 8px; color: #2c3e50; font-size: 16px; font-weight: 900; text-shadow: 0 0 5px rgba(255,255,255,0.7); }
         .balloon.shrink { border: 3px solid #d35400; background: linear-gradient(135deg, #f8c471, #f5b041) !important; box-shadow: 0 0 20px rgba(243,156,18,0.5); }
@@ -323,7 +324,7 @@
         let birdInterval;
         let baseSpeed = 2.5;
         let currentIntervalTime = 1200;
-        let highScore = localStorage.getItem('balloonHighScore') || 0;
+        let highScore = parseInt(localStorage.getItem('balloonHighScore')) || 0;
         let windFactor = 0; // Wind drift
 
         // Combo system
@@ -488,27 +489,31 @@
             
             if (!typeOverride) {
                 // Make normal balloons more common; specials are rarer
-                if (rand > 0.995) { type = 'heart'; emoji = '❤️'; }
-                else if (rand > 0.985) { type = 'gold'; emoji = '✨'; }
-                else if (rand > 0.96) { type = 'bomb'; emoji = '💣'; }
-                else if (rand > 0.94) { type = 'timer'; emoji = '⏳'; }
-                else if (rand > 0.92) { type = 'shrink'; emoji = '🤏'; }
-                else if (rand > 0.90) { type = 'party'; emoji = '🌈'; }
-                else if (rand > 0.88) { type = 'split'; emoji = '🌀'; }
-                else if (rand > 0.995) { type = 'explode'; emoji = '💥'; }
+                if (rand > 0.998) { type = 'heart'; emoji = '❤️'; }
+                else if (rand > 0.993) { type = 'gold'; emoji = '✨'; }
+                else if (rand > 0.980) { type = 'bomb'; emoji = '💣'; }
+                else if (rand > 0.965) { type = 'timer'; emoji = '⏳'; }
+                else if (rand > 0.950) { type = 'shrink'; emoji = '🤏'; }
+                else if (rand > 0.935) { type = 'party'; emoji = '🌈'; }
+                else if (rand > 0.915) { type = 'split'; emoji = '🌀'; }
+                else if (rand > 0.900) { type = 'double'; emoji = '2️⃣'; }
+                else if (rand > 0.885) { type = 'explode'; emoji = '💥'; }
                 else { type = 'normal'; }
             }
 
             // split/explode handled when popped in popBalloon
 
             balloon.classList.add(type);
-            if (type !== 'double') balloon.innerHTML = emoji;
+            balloon.innerHTML = emoji;
             
             const color = type === 'bomb' ? '#2f3542' :
                          type === 'timer' ? '#f5d76e' :
                          type === 'shrink' ? '#fad7a0' :
                          type === 'party' ? colors[Math.floor(Math.random() * colors.length)] :
                          colors[Math.floor(Math.random() * colors.length)];
+
+            balloon.dataset.type = type;
+            balloon.dataset.color = color;
 
             const size = isMini ? 40 : (type === 'normal' ? (60 + Math.random() * 40) : 80);
             const xPos = xOverride !== null ? xOverride : Math.random() * (window.innerWidth - size);
@@ -691,12 +696,13 @@
         function popRadius(x, y) {
             const balloons = document.querySelectorAll('.balloon:not(.popped)');
             balloons.forEach(b => {
-                const bx = b.offsetLeft + 40;
-                const by = window.innerHeight - b.offsetTop - 50;
+                const bx = b.offsetLeft + parseFloat(getComputedStyle(b).width) / 2;
+                const by = window.innerHeight - b.offsetTop - parseFloat(getComputedStyle(b).height) / 2;
                 const dist = Math.sqrt((x-bx)**2 + (y-by)**2);
                 if (dist < 250) {
-                    // Trigger click on nearby balloons
-                    b.onmousedown(new MouseEvent('mousedown'));
+                    const type = b.dataset.type || 'normal';
+                    const color = b.dataset.color || '#ffffff';
+                    popBalloon(b, type, color);
                 }
             });
         }
